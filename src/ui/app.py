@@ -32,7 +32,7 @@ class HandwrittenFormulaRecognitionApp:
         """初始化应用"""
         self.root = root
         self.root.title("手写数学公式识别系统")
-        self.root.geometry("1000x700")
+        self.root.geometry("1200x800")
         self.root.minsize(800, 600)  # 设置最小窗口大小
 
         # 设置设备(CPU/GPU)
@@ -62,7 +62,7 @@ class HandwrittenFormulaRecognitionApp:
     def _create_ui(self):
         """创建用户界面"""
         # 创建主框架，使用Grid布局管理器
-        self.root.columnconfigure(0, weight=3)  # 左侧占3份
+        self.root.columnconfigure(0, weight=4)  # 左侧占4份 - 增大比例
         self.root.columnconfigure(1, weight=1)  # 右侧占1份
         self.root.rowconfigure(0, weight=1)  # 主内容区域自动扩展
 
@@ -76,7 +76,7 @@ class HandwrittenFormulaRecognitionApp:
         # 配置左侧框架的网格布局
         left_frame.columnconfigure(0, weight=1)
         left_frame.rowconfigure(0, weight=1)  # 图像区域
-        left_frame.rowconfigure(1, weight=1)  # 画布区域
+        left_frame.rowconfigure(1, weight=2)  # 画布区域 - 增大比例
 
         # 图像显示区域（带滚动条）
         image_frame = ttk.LabelFrame(left_frame, text="图像显示")
@@ -117,77 +117,78 @@ class HandwrittenFormulaRecognitionApp:
         # 配置右侧框架
         right_frame.columnconfigure(0, weight=1)
         right_frame.rowconfigure(0, weight=0)  # 按钮区域不扩展
-        right_frame.rowconfigure(1, weight=1)  # 结果区域自动扩展
+        right_frame.rowconfigure(1, weight=1)  # 结果区域
+        right_frame.rowconfigure(2, weight=0)  # 历史区域减小
 
         # 控制按钮区域
         button_frame = ttk.Frame(right_frame)
         button_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        button_frame.columnconfigure(0, weight=1)
-        button_frame.columnconfigure(1, weight=1)
-        button_frame.columnconfigure(2, weight=1)
 
+        # 按钮使用更紧凑的布局
         self.load_button = ttk.Button(button_frame, text="加载图像", command=self._load_image)
-        self.load_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self.load_button.pack(side=tk.LEFT, padx=2, pady=5, fill=tk.X, expand=True)
 
         self.recognize_button = ttk.Button(button_frame, text="识别公式",
                                            command=self._recognize_formula,
                                            state=tk.DISABLED)
-        self.recognize_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.recognize_button.pack(side=tk.LEFT, padx=2, pady=5, fill=tk.X, expand=True)
 
         self.clear_button = ttk.Button(button_frame, text="清除画布", command=self._clear_canvas)
-        self.clear_button.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
+        self.clear_button.pack(side=tk.LEFT, padx=2, pady=5, fill=tk.X, expand=True)
 
-        # 识别结果显示（固定高度）
+        # 识别结果显示（减小高度）
         results_frame = ttk.LabelFrame(right_frame, text="识别结果")
-        results_frame.grid(row=1, column=0, sticky="nsew")
+        results_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 5))
         results_frame.columnconfigure(0, weight=0)  # 标签列不扩展
         results_frame.columnconfigure(1, weight=1)  # 内容列自动扩展
 
-        # 创建固定大小的结果显示区域
-        formula_label_text = ttk.Label(results_frame, text="识别公式:", anchor=tk.W)
-        formula_label_text.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-
-        # 使用文本框显示公式，固定高度，允许滚动
-        self.formula_label = scrolledtext.ScrolledText(results_frame, height=3, wrap=tk.WORD)
-        self.formula_label.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        # 使用紧凑布局显示结果
+        ttk.Label(results_frame, text="公式:", anchor=tk.W).grid(row=0, column=0, padx=5, pady=2, sticky=tk.W)
+        self.formula_label = scrolledtext.ScrolledText(results_frame, height=2, wrap=tk.WORD)
+        self.formula_label.grid(row=0, column=1, padx=5, pady=2, sticky="ew")
         self.formula_label.config(state=tk.DISABLED)  # 设置为只读
 
-        latex_label_text = ttk.Label(results_frame, text="LaTeX:", anchor=tk.W)
-        latex_label_text.grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-
-        self.latex_label = scrolledtext.ScrolledText(results_frame, height=3, wrap=tk.WORD)
-        self.latex_label.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        ttk.Label(results_frame, text="LaTeX:", anchor=tk.W).grid(row=1, column=0, padx=5, pady=2, sticky=tk.W)
+        self.latex_label = scrolledtext.ScrolledText(results_frame, height=2, wrap=tk.WORD)
+        self.latex_label.grid(row=1, column=1, padx=5, pady=2, sticky="ew")
         self.latex_label.config(state=tk.DISABLED)  # 设置为只读
 
-        result_label_text = ttk.Label(results_frame, text="计算结果:", anchor=tk.W)
-        result_label_text.grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-
-        self.result_label = scrolledtext.ScrolledText(results_frame, height=3, wrap=tk.WORD)
-        self.result_label.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
+        ttk.Label(results_frame, text="计算:", anchor=tk.W).grid(row=2, column=0, padx=5, pady=2, sticky=tk.W)
+        self.result_label = scrolledtext.ScrolledText(results_frame, height=2, wrap=tk.WORD)
+        self.result_label.grid(row=2, column=1, padx=5, pady=2, sticky="ew")
         self.result_label.config(state=tk.DISABLED)  # 设置为只读
 
-        # 添加历史记录区域
-        history_frame = ttk.LabelFrame(right_frame, text="识别历史")
-        history_frame.grid(row=2, column=0, sticky="nsew", pady=(10, 0))
-        history_frame.columnconfigure(0, weight=1)
-        history_frame.rowconfigure(0, weight=1)
+        # 折叠历史记录区域
+        history_button = ttk.Button(right_frame, text="显示/隐藏历史记录", command=self._toggle_history)
+        history_button.grid(row=2, column=0, sticky="ew", pady=(5, 0))
 
-        self.history_text = scrolledtext.ScrolledText(history_frame, height=8, wrap=tk.WORD)
-        self.history_text.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
+        # 添加历史记录区域（初始隐藏）
+        self.history_frame = ttk.LabelFrame(right_frame, text="识别历史")
+        # 不使用grid添加到布局中，而是在需要时添加
+        self.history_frame.columnconfigure(0, weight=1)
+        self.history_frame.rowconfigure(0, weight=1)
+
+        self.history_text = scrolledtext.ScrolledText(self.history_frame, height=6, wrap=tk.WORD)
+        self.history_text.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
         self.history_text.config(state=tk.DISABLED)  # 设置为只读
+        self.history_visible = False  # 历史记录初始隐藏
 
         # 状态栏
         self.status_bar = ttk.Label(self.root, text="就绪", relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.grid(row=1, column=0, columnspan=2, sticky="ew")
 
-        # 设置右侧框架高度权重
-        right_frame.rowconfigure(1, weight=2)  # 结果区域
-        right_frame.rowconfigure(2, weight=1)  # 历史区域
+    def _toggle_history(self):
+        """切换历史记录区域的显示/隐藏状态"""
+        if self.history_visible:
+            self.history_frame.grid_forget()
+            self.history_visible = False
+        else:
+            self.history_frame.grid(row=3, column=0, sticky="nsew", pady=(5, 0))
+            self.history_visible = True
 
     def _on_canvas_resize(self, event):
         """处理画布尺寸变化事件"""
-        # 打印新尺寸以便调试
-        # print(f"Canvas resized: {event.width}x{event.height}")
+        # 可用于调整画布内容
         pass
 
     def _load_model_async(self):
@@ -229,7 +230,7 @@ class HandwrittenFormulaRecognitionApp:
         if self.last_x and self.last_y:
             self.canvas.create_line(
                 self.last_x, self.last_y, event.x, event.y,
-                width=2, fill="black", capstyle=tk.ROUND,
+                width=3, fill="black", capstyle=tk.ROUND,
                 smooth=tk.TRUE, splinesteps=36
             )
         self.last_x = event.x
@@ -287,9 +288,9 @@ class HandwrittenFormulaRecognitionApp:
 
             # 如果尺寸太小（初始化时），使用默认值
             if display_width < 50:
-                display_width = 400
+                display_width = 600
             if display_height < 50:
-                display_height = 300
+                display_height = 400
 
             # 获取图像尺寸
             height, width = image.shape[:2]
