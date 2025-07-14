@@ -60,10 +60,8 @@ def train_model(epochs=15, batch_size=64, learning_rate=0.001):
 
 
     # 定义优化器
-    optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
-    
-    # 学习率调度器
-    scheduler = CosineAnnealingLR(optimizer, T_max=epochs, eta_min=learning_rate/100)
+    optimizer = optim.AdamW(model.parameters())
+
     
     # 最佳模型保存路径
     best_model_path = os.path.join('../model', 'best_symbol_model.pth')
@@ -159,9 +157,7 @@ def train_model(epochs=15, batch_size=64, learning_rate=0.001):
         test_accuracy = test_correct / test_total
         history['val_loss'].append(test_loss)
         history['val_acc'].append(test_accuracy)
-        
-        # 学习率调度
-        scheduler.step()
+
         
         # 打印轮次结果
         print(f'Epoch {epoch+1}/{epochs}: '
@@ -248,7 +244,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='训练手写公式识别模型')
     parser.add_argument('--epochs', type=int, default=15, help='训练轮数')
     parser.add_argument('--batch_size', type=int, default=64, help='批次大小')
-    parser.add_argument('--lr', type=float, default=0.001, help='学习率')
+    parser.add_argument('--lr', type=float, default=0.005, help='学习率')
     
     args = parser.parse_args()
     

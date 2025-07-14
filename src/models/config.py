@@ -17,5 +17,5 @@ MODEL_CONFIG = {
     'hidden_channels': 32,
     'num_classes': len(SYMBOL_CLASSES),
     'dropout_rate': 0.25,
-    'learning_rate': 0.001
+    'learning_rate': 0.005
 }
