@@ -15,7 +15,7 @@ class MathSymbolGenerator:
     """
     用于生成数学符号数据集的类
     """
-    def __init__(self, output_dir="./data/math_symbols"):
+    def __init__(self, output_dir="../data/math_symbols"):
         """
         初始化生成器
         

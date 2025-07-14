@@ -54,10 +54,11 @@ def train_model(epochs=15, batch_size=64, learning_rate=0.001):
     # 计算参数数量
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"模型参数数量: {param_count:,}")
-    
+
     # 定义损失函数
     criterion = nn.CrossEntropyLoss()
-    
+
+
     # 定义优化器
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     
