@@ -223,47 +223,45 @@ def recognize_formula(model, symbols_list, device):
         
     return formula_string, evaluation_result, recognition_results
 
-def generate_visualization(image, recognition_results):
+
+
+def generate_visualization(base_image, recognition_results, offset=(0, 0), scale=1.0):
     """
-    生成识别结果的可视化图像
-    
+    【最终修正版】在给定的基础图像上，根据偏移量和缩放比例绘制标注。
+
     参数:
-        image: 原始输入图像
-        recognition_results: 识别结果列表
-        
-    返回:
-        可视化后的图像
+        base_image:          一个已经包含居中内容的、与显示区域等大的背景图。
+        recognition_results: 识别结果列表。
+        offset:              内容在base_image上的偏移量 (x_offset, y_offset)。
+        scale:               内容被缩放的比例。
     """
-    # 确保图像是RGB格式
-    if isinstance(image, np.ndarray):
-        if len(image.shape) == 2:
-            vis_image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-        else:
-            vis_image = image.copy()
-    else:
-        # 如果是PIL图像，转换为NumPy数组
-        vis_image = np.array(image)
-        if len(vis_image.shape) == 2:
-            vis_image = cv2.cvtColor(vis_image, cv2.COLOR_GRAY2BGR)
-    
-    # 标记每个识别出的符号
+    vis_image = base_image.copy()
+    offset_x, offset_y = offset
+
     for result in recognition_results:
+        # 获取相对于原始、未缩放内容的坐标 (x, y, w, h)
         x, y, w, h = result['position']
-        symbol = result['symbol']
+        symbol = result.get('symbol', '?')
         conf = result.get('confidence', 0) * 100
-        
-        # 绘制边界框
-        cv2.rectangle(vis_image, (x, y), (x+w, y+h), (0, 255, 0), 2)
-        
-        # 添加识别结果标签
-        label = f"{symbol} ({conf:.1f}%)"
-        cv2.putText(vis_image, label, (x, y-5), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 1)
-    
-    # 在底部添加识别的公式
-    formula = formula_to_string(recognition_results)
-    cv2.putText(vis_image, f"Formula: {formula}", 
-                (10, vis_image.shape[0]-10), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
-    
+
+        # 【核心修正】
+        # 1. 先将原始坐标和尺寸按比例缩放
+        # 2. 再加上偏移量，得到在最终大图上的绝对坐标
+        final_x = int(x * scale) + offset_x
+        final_y = int(y * scale) + offset_y
+        final_w = int(w * scale)
+        final_h = int(h * scale)
+
+        # 使用计算出的最终坐标绘制绿色边界框
+        cv2.rectangle(vis_image, (final_x, final_y), (final_x + final_w, final_y + final_h), (0, 255, 0), 2)
+
+        # 使用最终坐标添加红色识别结果标签
+        symbol_display_map = {'×': 'x', '÷': '/'}
+        display_symbol = symbol_display_map.get(symbol, symbol)
+        label = f"{display_symbol} ({conf:.1f}%)"
+
+        label_y_pos = final_y - 10 if final_y > 20 else final_y + final_h + 20
+        cv2.putText(vis_image, label, (final_x, label_y_pos),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
     return vis_image

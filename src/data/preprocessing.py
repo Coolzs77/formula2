@@ -39,58 +39,48 @@ def pad_grayscale(image, target_size, pad_value=0):
     return padded
 
 
-def preprocess_image(image_input, target_size=(28, 28), threshold=True, normalize=False):
+def preprocess_image(image_input,source='canvas', normalize=False):
     """
-    对输入的手写公式图像进行预处理
+    对输入的手写公式图像进行预处理。
 
     参数:
-        image_input: 输入图像的文件路径或NumPy数组
-        target_size: 目标尺寸，默认28x28
-        threshold: 是否进行二值化
-        normalize: 是否归一化到[0,1]范围
+        image_input: 输入图像的NumPy数组。
+        source:      图像来源, 'file' 或 'canvas'。
+        normalize:   是否归一化到[0,1]范围。
 
     返回:
-        预处理后的二值化图像
+        预处理后的灰度图像。
     """
-    # 检查输入是字符串（文件路径）还是NumPy数组
-    if isinstance(image_input, str):
-        # 读取图像文件
-        original_image = cv2.imread(image_input)
+    if image_input is None:
+        raise ValueError("输入图像不能为空 (image_input is None)")
 
-        # 检查图像是否成功加载
-        if original_image is None:
-            raise Exception(f"无法读取图像: {image_input}")
+    # 无论输入是彩图还是灰度图，都统一转换为灰度图进行处理
+    if len(image_input.shape) == 3:
+        gray_image = cv2.cvtColor(image_input, cv2.COLOR_BGR2GRAY)
     else:
-        # 如果输入已经是NumPy数组，直接使用
-        original_image = image_input
+        gray_image = image_input.copy()  # 如果已经是灰度图，创建一个副本以防意外修改
 
-    # 确保图像是3通道的（彩色图像）
-    if len(original_image.shape) == 2:  # 如果是灰度图
-        original_image = cv2.cvtColor(original_image, cv2.COLOR_GRAY2BGR)
+    # --- 核心逻辑 ---
+    # 根据明确的来源参数来决定是否需要反转颜色
+    if source == 'file':
+        # 计算图像的平均像素值
+        mean_pixel_value = np.mean(gray_image)
 
-    # 转换为灰度图
-    gray_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+        # 只有当图像是亮背景（白底黑字）时才进行颜色反转
+        if mean_pixel_value > 127:  # 阈值127可以根据需要微调
+            # 反转颜色：白(255)->黑(0), 黑(0)->白(255)
+            gray_image = 255 - gray_image
+
+    elif source =='canvas':
+        # 如果图像来自画布（假定已经是黑底或灰度），则直接使用
+        gray_image = gray_image
     # 使用高斯模糊去噪
     blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
 
-    # 自适应二值化
-    # if threshold:
-    #     binary_image = cv2.adaptiveThreshold(blurred_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-    #                                      cv2.THRESH_BINARY_INV, 11, 2)
-    #
-    #     # 进行形态学操作以去除小噪点
-    #     kernel = np.ones((2, 2), np.uint8)
-    #     processed_image = cv2.morphologyEx(binary_image, cv2.MORPH_OPEN, kernel)
-    # else:
-    #     processed_image = blurred_image
+
     processed_image = blurred_image
+
     cv2.imshow("blurred_image", blurred_image)
-    # 调整到目标大小
-    # if target_size :
-    #     if processed_image.shape[:2] >= target_size:
-    #         processed_image = cv2.resize(processed_image, target_size, interpolation=cv2.INTER_AREA)
-    #     else :
-    #         processed_image = pad_grayscale(processed_image, target_size)
 
     # 归一化到[0,1]范围
     if normalize:
@@ -181,7 +171,7 @@ def normalize_symbol(symbol_image, target_size=(28, 28)):
     return normalized_image
 
 
-def process_image(image_input):
+def process_image(image_input,source):
     """
     完整的图像处理流水线
 
@@ -194,13 +184,14 @@ def process_image(image_input):
         processed_image: 预处理后的图像
     """
     # 预处理图像（不缩放到28x28，保留原始尺寸以便可视化）
-    preprocessed_image = preprocess_image(image_input, target_size=None, normalize=False)
+    preprocessed_image = preprocess_image(image_input,source, normalize=False)
     # 分割符号
     symbols = segment_symbols(preprocessed_image)
 
-    for idx, symbol in enumerate(symbols):
-        # symbol['normalized_image'] = cv2.bitwise_not(symbol['normalized_image'])
-        cv2.imshow("normalized_image" + str(idx), symbol['normalized_image'])
+
+    # for idx, symbol in enumerate(symbols):
+    #     # symbol['normalized_image'] = cv2.bitwise_not(symbol['normalized_image'])
+    #     cv2.imshow("normalized_image" + str(idx), symbol['normalized_image'])
 
     # 返回符号列表和预处理后的图像
     return symbols, preprocessed_image

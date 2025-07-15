@@ -43,6 +43,10 @@ class HandwrittenFormulaRecognitionApp:
         self.last_x = None
         self.last_y = None
 
+        # 标明是画布还是文件
+        self.image_source = None  # 'file' 或 'canvas'
+
+
         # 存储图像
         self.original_image = None
         self.processed_image = None
@@ -254,6 +258,9 @@ class HandwrittenFormulaRecognitionApp:
         self.processed_image = None
         self.recognition_results = None
 
+        # 清除画布时，重置图像来源
+        self.image_source = None
+
         # 清除结果标签
         self.formula_var.set("")
         self.latex_var.set("")
@@ -274,7 +281,8 @@ class HandwrittenFormulaRecognitionApp:
 
                 # 读取原始图像
                 self.original_image = cv2.imread(file_path)
-
+                # 明确设置图像来源为'file'
+                self.image_source = 'file'
                 # 显示图像
                 self._display_image(self.original_image)
 
@@ -290,103 +298,55 @@ class HandwrittenFormulaRecognitionApp:
 
     def _display_image(self, image):
         """在UI中显示图像"""
-        if image is not None:
-            # 清除画布
-            self.image_canvas.delete("all")
 
-            # 获取显示区域大小
-            canvas_width = self.image_canvas.winfo_width()
-            canvas_height = self.image_canvas.winfo_height()
+        if image is None:
+            return
 
-            # 如果尺寸太小（初始化时），使用默认值
-            if canvas_width < 50:
-                canvas_width = 400
-            if canvas_height < 50:
-                canvas_height = 300
+            # 步骤 1: 获取显示区域的实际大小
+        canvas_width = self.image_canvas.winfo_width()
+        canvas_height = self.image_canvas.winfo_height()
 
-            # 确保图像是彩色的，如果是灰度图则转换为彩色
-            if len(image.shape) == 2:
-                image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        # 在程序刚启动时，画布尺寸可能为1，需要提供默认值
+        if canvas_width <= 1: canvas_width = 600
+        if canvas_height <= 1: canvas_height = 400
 
-            # 获取图像尺寸
-            height, width = image.shape[:2]
+        # 步骤 2: 创建一个最终的、与显示区域等大的纯黑色背景
+        final_image_bg = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
 
-            # 对于非常小的图像（例如28x28的手写数字），先添加白色边框，然后再适当放大
-            if width < 50 or height < 50:
-                # 添加白色边框 - 增加周围20像素的白色边框
-                bordered_image = np.ones((height + 40, width + 40, 3), dtype=np.uint8) * 255
-                bordered_image[20:20 + height, 20:20 + width] = image
+        # 步骤 3: 准备要放置的内容
+        # 确保内容是3通道的彩色图，以便粘贴
+        if len(image.shape) == 2:
+            content_to_place = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        else:
+            content_to_place = image.copy()
 
-                # 放大到合理尺寸，但不超过画布的1/3
-                target_size = min(canvas_width // 3, canvas_height // 3)
-                scale = min(target_size / bordered_image.shape[1], target_size / bordered_image.shape[0])
+        img_h, img_w = content_to_place.shape[:2]
 
-                new_width = max(int(bordered_image.shape[1] * scale), 100)
-                new_height = max(int(bordered_image.shape[0] * scale), 100)
+        # 步骤 4: 【核心逻辑】决定是缩小还是直接使用
+        if img_h > canvas_height or img_w > canvas_width:
+            # 如果图像比画布大，则计算缩放比例并缩小
+            scale = min(canvas_height / img_h, canvas_width / img_w)
+            new_w, new_h = int(img_w * scale), int(img_h * scale)
+            content_to_place = cv2.resize(content_to_place, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        # else:
+        # 如果图像比画布小或相等，则不进行任何缩放，保持其原始尺寸
 
-                resized_image = cv2.resize(bordered_image, (new_width, new_height),
-                                           interpolation=cv2.INTER_NEAREST)
+        # 步骤 5: 计算粘贴位置，以确保内容在黑色背景上居中
+        final_content_h, final_content_w = content_to_place.shape[:2]
+        x_offset = (canvas_width - final_content_w) // 2
+        y_offset = (canvas_height - final_content_h) // 2
 
-                # 再创建黑色背景图像
-                bg_image = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
+        # 步骤 6: 将内容“粘贴”到黑色背景的中央
+        final_image_bg[y_offset: y_offset + final_content_h, x_offset: x_offset + final_content_w] = content_to_place
 
-                # 将调整大小后的图像放在中心位置
-                x_offset = (canvas_width - new_width) // 2
-                y_offset = (canvas_height - new_height) // 2
+        # 步骤 7: 将最终合成的图像转换为Tkinter格式并显示
+        img_rgb = cv2.cvtColor(final_image_bg, cv2.COLOR_BGR2RGB)
+        pil_image = Image.fromarray(img_rgb)
+        photo = ImageTk.PhotoImage(image=pil_image)
 
-                bg_image[y_offset:y_offset + new_height, x_offset:x_offset + new_width] = resized_image
-                display_image = bg_image
-
-            # 对于中等大小的图像，保持原始大小但添加黑色背景
-            elif width < canvas_width and height < canvas_height:
-                # 创建黑色背景图像
-                bg_image = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
-
-                # 计算图像在画布中的位置（居中）
-                x_offset = (canvas_width - width) // 2
-                y_offset = (canvas_height - height) // 2
-
-                # 将原图像放置在背景图像的中心
-                bg_image[y_offset:y_offset + height, x_offset:x_offset + width] = image
-                display_image = bg_image
-
-            # 对于大图像，需要缩小以适应画布
-            else:
-                scale_ratio = min(canvas_width / width, canvas_height / height)
-                new_width = int(width * scale_ratio)
-                new_height = int(height * scale_ratio)
-                resized_image = cv2.resize(image, (new_width, new_height))
-
-                # 如果缩小后的图像比画布小，添加黑色填充
-                if new_width < canvas_width or new_height < canvas_height:
-                    bg_image = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
-                    x_offset = (canvas_width - new_width) // 2
-                    y_offset = (canvas_height - new_height) // 2
-                    bg_image[y_offset:y_offset + new_height, x_offset:x_offset + new_width] = resized_image
-                    display_image = bg_image
-                else:
-                    display_image = resized_image
-
-            # 如果是浮点类型数组，转换为uint8
-            if display_image.dtype == np.float32 or display_image.dtype == np.float64:
-                display_image = (display_image * 255).astype(np.uint8)
-
-            # 转换颜色通道
-            display_image = cv2.cvtColor(display_image, cv2.COLOR_BGR2RGB)
-
-            # 将OpenCV图像转换为PIL格式
-            pil_image = Image.fromarray(display_image)
-
-            # 转换为PhotoImage格式
-            photo = ImageTk.PhotoImage(image=pil_image)
-
-            # 在画布中居中显示图像
-            self.image_canvas.create_image(canvas_width // 2, canvas_height // 2, anchor=tk.CENTER, image=photo)
-            self.image_canvas.image = photo  # 保持引用，防止垃圾回收
-
-            # 保存当前显示的图像
-            self.current_display_image = display_image
-
+        self.image_canvas.delete("all")
+        self.image_canvas.create_image(0, 0, anchor=tk.NW, image=photo)
+        self.image_canvas.image = photo  # 关键：保持对photo的引用
     def _get_image_from_canvas(self):
         """将画布内容转换为图像"""
         try:
@@ -440,25 +400,33 @@ class HandwrittenFormulaRecognitionApp:
             messagebox.showinfo("提示", "模型尚未加载完成，请稍候")
             return
 
-        if self.original_image is None:
-            # 如果没有加载图像，使用画布内容
-            self._get_image_from_canvas()
+        image_to_process = None
+        current_source = self.image_source
 
-        if self.original_image is None:
+        if current_source == 'file':
+            image_to_process = self.original_image
+        else:  # 如果是来自画布或未指定来源
+            # 【新代码】从画布获取图像，并设置来源
+            image_to_process = self._get_image_from_canvas()  # 假设此函数返回一个numpy数组
+            current_source = 'canvas'
+
+        if image_to_process is None:
             messagebox.showinfo("提示", "请先加载图像或在画布上绘制")
             return
 
         try:
             self.status_bar.config(text="正在识别公式...")
 
-            # 进行图像预处理
-            preprocessed_image = preprocess_image(self.original_image)
-
+            # 【核心修改】将图像来源作为参数传递给预处理函数
+            preprocessed_image = preprocess_image(
+                image_to_process,
+                source = current_source  # 传递我们新的状态变量
+            )
             # 显示预处理后的图像
             self._display_image(preprocessed_image)
 
             # 分割符号
-            symbols_list, processed_image = process_image(self.original_image)
+            symbols_list, processed_image = process_image(self.original_image,source=current_source)
 
             # 检查是否成功分割出符号
             if not symbols_list:
@@ -474,8 +442,39 @@ class HandwrittenFormulaRecognitionApp:
             # 生成LaTeX
             latex_string = formula_to_latex(recognition_results)
 
-            # 生成可视化结果
-            visualization_result = generate_visualization(self.original_image, recognition_results)
+            # 步骤 2: 【核心】创建最终的显示图像
+            # 获取显示区域的实际大小
+            canvas_width = self.image_canvas.winfo_width()
+            canvas_height = self.image_canvas.winfo_height()
+            if canvas_width <= 1: canvas_width = 600
+            if canvas_height <= 1: canvas_height = 400
+
+            # 创建一个最终的、与显示区域等大的黑色背景
+            final_display_bg = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
+
+            # 计算原始图像内容(processed_image)应该缩放到的尺寸和粘贴位置
+            content_h, content_w = processed_image.shape[:2]
+
+            scale = min(canvas_width / content_w, canvas_height / content_h, 1.0)
+            new_w, new_h = int(content_w * scale), int(content_h * scale)
+            # 计算居中所需的偏移量
+            x_offset = (canvas_width - new_w) // 2
+            y_offset = (canvas_height - new_h) // 2
+
+            # 将处理后的干净内容（黑底白字）缩放并粘贴到黑色背景中央
+            resized_content = cv2.resize(processed_image, (new_w, new_h))
+            final_display_bg[y_offset:y_offset + new_h, x_offset:x_offset + new_w] = cv2.cvtColor(resized_content,
+                                                                                                  cv2.COLOR_GRAY2BGR)
+
+            # 步骤 3: 调用新的可视化函数，在最终图像上绘制标注
+            # 我们传递：1. 包含内容的黑色大图, 2. 识别结果, 3. 内容的偏移量
+            visualization_result = generate_visualization(
+                final_display_bg,
+                recognition_results,
+                offset=(x_offset, y_offset),
+                scale=scale  # <--- 将计算出的scale传递进去
+
+            )
             self._display_image(visualization_result)
 
             # 显示结果
