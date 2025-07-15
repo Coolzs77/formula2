@@ -10,6 +10,35 @@ from PIL import Image
 import os
 import sys
 
+
+def pad_grayscale(image, target_size, pad_value=0):
+    """
+    将灰度图填充至指定大小
+
+    参数:
+        image: 输入灰度图像 (H x W)
+        target_size: 目标尺寸 (宽度, 高度)
+        pad_value: 填充值，默认为0（黑色）
+
+    返回:
+        填充后的灰度图像 (target_height x target_width)
+    """
+    h, w = image.shape
+    target_w, target_h = target_size
+
+    # 创建空白画布
+    padded = np.full((target_h, target_w), pad_value, dtype=np.uint8)
+
+    # 计算放置位置（居中）
+    x_offset = (target_w - w) // 2
+    y_offset = (target_h - h) // 2
+
+    # 放置原图
+    padded[y_offset:y_offset + h, x_offset:x_offset + w] = image
+
+    return padded
+
+
 def preprocess_image(image_input, target_size=(28, 28), threshold=True, normalize=False):
     """
     对输入的手写公式图像进行预处理
@@ -41,11 +70,10 @@ def preprocess_image(image_input, target_size=(28, 28), threshold=True, normaliz
 
     # 转换为灰度图
     gray_image = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
-
     # 使用高斯模糊去噪
     blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
 
-    # # 自适应二值化
+    # 自适应二值化
     # if threshold:
     #     binary_image = cv2.adaptiveThreshold(blurred_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
     #                                      cv2.THRESH_BINARY_INV, 11, 2)
@@ -56,15 +84,20 @@ def preprocess_image(image_input, target_size=(28, 28), threshold=True, normaliz
     # else:
     #     processed_image = blurred_image
     processed_image = blurred_image
+    cv2.imshow("blurred_image", blurred_image)
     # 调整到目标大小
-    if target_size and processed_image.shape[:2] != target_size:
-        processed_image = cv2.resize(processed_image, target_size, interpolation=cv2.INTER_AREA)
+    # if target_size :
+    #     if processed_image.shape[:2] >= target_size:
+    #         processed_image = cv2.resize(processed_image, target_size, interpolation=cv2.INTER_AREA)
+    #     else :
+    #         processed_image = pad_grayscale(processed_image, target_size)
 
     # 归一化到[0,1]范围
     if normalize:
         processed_image = processed_image.astype(np.float32) / 255.0
 
     return processed_image
+
 
 def segment_symbols(preprocessed_image, min_contour_area=20, padding=2):
     """
@@ -94,12 +127,12 @@ def segment_symbols(preprocessed_image, min_contour_area=20, padding=2):
         # 获取边界框
         x, y, w, h = cv2.boundingRect(contour)
 
-        # # 过滤掉太小的轮廓（可能是噪点）
-        # if w < 10 or h < 10 or cv2.contourArea(contour) < min_contour_area:
-        #     continue
+        # 过滤掉太小的轮廓（可能是噪点）
+        if w < 5 or h < 5 or cv2.contourArea(contour) < min_contour_area:
+            continue
 
         # 提取符号图像
-        symbol_image = gray[y:y+h, x:x+w]
+        symbol_image = gray[y:y + h, x:x + w]
 
         # 添加到结果列表，包含位置信息
         symbols.append({
@@ -112,6 +145,7 @@ def segment_symbols(preprocessed_image, min_contour_area=20, padding=2):
     symbols.sort(key=lambda s: s['position'][0])
 
     return symbols
+
 
 def normalize_symbol(symbol_image, target_size=(28, 28)):
     """
@@ -136,12 +170,16 @@ def normalize_symbol(symbol_image, target_size=(28, 28)):
     # 将符号居中放置
     x_offset = (max_dim - w) // 2
     y_offset = (max_dim - h) // 2
-    square_image[y_offset:y_offset+h, x_offset:x_offset+w] = symbol_image
+    square_image[y_offset:y_offset + h, x_offset:x_offset + w] = symbol_image
 
     # 调整到目标大小
-    normalized_image = cv2.resize(square_image, target_size, interpolation=cv2.INTER_AREA)
+    if square_image.shape[:2] >= target_size:
+        normalized_image = cv2.resize(square_image, target_size, interpolation=cv2.INTER_AREA)
+    else:
+        normalized_image = pad_grayscale(square_image, target_size)
 
     return normalized_image
+
 
 def process_image(image_input):
     """
@@ -157,9 +195,12 @@ def process_image(image_input):
     """
     # 预处理图像（不缩放到28x28，保留原始尺寸以便可视化）
     preprocessed_image = preprocess_image(image_input, target_size=None, normalize=False)
-
     # 分割符号
     symbols = segment_symbols(preprocessed_image)
+
+    for idx, symbol in enumerate(symbols):
+        # symbol['normalized_image'] = cv2.bitwise_not(symbol['normalized_image'])
+        cv2.imshow("normalized_image" + str(idx), symbol['normalized_image'])
 
     # 返回符号列表和预处理后的图像
     return symbols, preprocessed_image

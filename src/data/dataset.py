@@ -1,88 +1,102 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-数据集加载模块
+数据集加载模块 - 最终健壮版本
+使用动态绝对路径，与执行位置无关
 """
 
 import os
+import pickle
 from glob import glob
-
-import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader, ConcatDataset
-from torchvision import datasets, transforms
+from torchvision import transforms
 import torch
 
-from src.models.config import SYMBOL_CLASSES
+# 导入配置，假设config.py在src/models/下
+# 为了让这个脚本也能独立运行，我们做一些路径处理
+try:
+    from src.models.config import SYMBOL_CLASSES
+except ImportError:
+    # 如果直接运行此脚本，需要手动添加项目根目录到sys.path
+    import sys
+
+    # __file__ 是当前脚本的路径
+    # os.path.dirname(__file__) 是当前脚本所在的目录 (src/data)
+    # os.path.dirname(os.path.dirname(__file__)) 是上级目录 (src)
+    # os.path.dirname(os.path.dirname(os.path.dirname(__file__))) 是项目的根目录
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    sys.path.append(project_root)
+    from src.models.config import SYMBOL_CLASSES
+
+# --- 关键修改：动态获取项目根目录 ---
+# 这使得无论从哪里运行脚本，路径都是正确的
+# __file__ 指的是当前脚本 (dataset.py) 的路径
+# os.path.abspath(__file__) 获取其绝对路径
+# 通过三次 os.path.dirname 向上导航到项目根目录
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class MathSymbolDataset(Dataset):
-    """
-    加载数学符号数据集的类
-    """
+    """数学符号数据集类"""
 
-    def __init__(self, samples, transform=None):
-        """
-        初始化数据集
-
-        参数:
-            samples: 图像路径和标签的列表 [(路径, 标签), ...]
-            transform: 图像变换
-        """
+    def __init__(self, samples, transform=None, target_size=28):
         self.samples = samples
         self.transform = transform
+        self.target_size = target_size
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
         img_path, label = self.samples[idx]
-
-        # 读取图像
         try:
-            image = Image.open(img_path).convert('L')  # 转换为灰度图
-
-            # 强制调整图像大小为28x28，确保尺寸一致
-            if image.size != (28, 28):
-                image = image.resize((28, 28), Image.LANCZOS)
-
+            image = Image.open(img_path).convert('L')
+            if image.size != (self.target_size, self.target_size):
+                image = image.resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
         except Exception as e:
             print(f"无法读取图像 {img_path}: {e}")
-            # 创建一个空白图像作为替代
-            image = Image.new('L', (28, 28), 255)
+            image = Image.new('L', (self.target_size, self.target_size), 0)  # 使用黑色背景
 
         if self.transform:
             image = self.transform(image)
-
         return image, label
-class TransformDataset(Dataset):
-    """
-    为子数据集应用变换的包装器
-    """
-    def __init__(self, subset, transform=None):
-        self.subset = subset
+
+
+class MnistSplitDataset(Dataset):
+    """MNIST划分数据集加载器"""
+
+    def __init__(self, pkl_path, transform=None, target_size=28):
+        with open(pkl_path, 'rb') as f:
+            data = pickle.load(f)
+        self.images = data['images']
+        self.labels = data['labels']
         self.transform = transform
-        
-    def __getitem__(self, idx):
-        x, y = self.subset[idx]
-        if self.transform:
-            x = self.transform(x)
-        return x, y
-        
+        self.target_size = target_size
+
     def __len__(self):
-        return len(self.subset)
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        image = self.images[idx]
+        label = int(self.labels[idx])
+        image = Image.fromarray(image)
+        if image.size != (self.target_size, self.target_size):
+            image = image.resize((self.target_size, self.target_size), Image.Resampling.LANCZOS)
+        if self.transform:
+            image = self.transform(image)
+        return image, label
 
 
-def load_dataset(batch_size=64):
+def load_datasets(batch_size=64, target_size=28):
     """
-    加载数据集（MNIST + 数学符号）
-
-    参数:
-        batch_size: 批次大小
-
-    返回:
-        训练数据加载器和测试数据加载器
+    加载所有数据集的最终健壮版本
     """
+    print("=" * 60)
+    print("加载数据集 - 健壮路径版本")
+    print(f"项目根目录: {PROJECT_ROOT}")
+    print("=" * 60)
+
     # 定义图像变换
     train_transform = transforms.Compose([
         transforms.RandomRotation(10),
@@ -90,87 +104,83 @@ def load_dataset(batch_size=64):
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,))
     ])
-
-    test_transform = transforms.Compose([
+    val_test_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,))
     ])
 
-    # 加载MNIST数据集 (数字0-9)
-    print("加载MNIST数据集...")
-    mnist_train = datasets.MNIST('../data/mnist', train=True, download=True, transform=train_transform)
-    mnist_test = datasets.MNIST('../data/mnist', train=False, download=True, transform=test_transform)
+    # 1. 加载MNIST数据 - 使用绝对路径
+    print("1. 加载MNIST数据...")
+    # os.path.join() 会根据操作系统自动使用正确的路径分隔符（'\' 或 '/'）
+    mnist_train_path = os.path.join(PROJECT_ROOT, "data", "mnist_split", "mnist_train.pkl")
+    mnist_val_path = os.path.join(PROJECT_ROOT, "data", "mnist_split", "mnist_val.pkl")
+    mnist_test_path = os.path.join(PROJECT_ROOT, "data", "mnist_split", "mnist_test.pkl")
 
-    train_datasets = [mnist_train]
-    test_datasets = [mnist_test]
+    all_datasets = {'train': [], 'val': [], 'test': []}
 
-    # 加载自定义数学符号数据集 (类别10-14)
-    print("加载数学符号数据集...")
-    math_symbols_dir = '../data/math_symbols'
-
-    if os.path.exists(math_symbols_dir):
-        # 类别ID列表
-        symbol_ids = [10, 11, 12, 13, 14]  # +, -, ×, ÷, .
-
-        # 收集所有数学符号样本
-        all_samples = []
-
-        for symbol_id in symbol_ids:
-            symbol_dir = os.path.join(math_symbols_dir, str(symbol_id))
-            if not os.path.exists(symbol_dir):
-                print(f"警告: 符号目录 {symbol_dir} 不存在")
-                continue
-
-            # 获取此符号的所有图像文件
-            image_files = glob(os.path.join(symbol_dir, "*.png")) + \
-                          glob(os.path.join(symbol_dir, "*.jpg"))
-
-            if not image_files:
-                print(f"警告: 符号ID {symbol_id} 目录为空")
-                continue
-
-            # 将文件路径和标签添加到样本列表
-            symbol_samples = [(img_path, symbol_id) for img_path in image_files]
-            all_samples.extend(symbol_samples)
-
-            print(f"加载符号ID {symbol_id} ({SYMBOL_CLASSES[symbol_id]}): {len(symbol_samples)} 个样本")
-
-        if all_samples:
-            # 创建数据集
-            math_symbol_dataset = MathSymbolDataset(all_samples)
-
-            # 分割为训练集和测试集
-            train_size = int(0.8 * len(math_symbol_dataset))
-            test_size = len(math_symbol_dataset) - train_size
-
-            math_train, math_test = torch.utils.data.random_split(
-                math_symbol_dataset, [train_size, test_size]
-            )
-
-            # 应用变换
-            math_train = TransformDataset(math_train, train_transform)
-            math_test = TransformDataset(math_test, test_transform)
-
-            # 添加到数据集列表
-            train_datasets.append(math_train)
-            test_datasets.append(math_test)
-
-            print(f"成功加载 {len(math_symbol_dataset)} 个数学符号样本")
-            print(f"- 训练集: {train_size} 样本")
-            print(f"- 测试集: {test_size} 样本")
-        else:
-            print("未找到数学符号样本")
+    if os.path.exists(mnist_train_path):
+        all_datasets['train'].append(
+            MnistSplitDataset(mnist_train_path, transform=train_transform, target_size=target_size))
+        print(f"  ✓ MNIST 训练: {len(all_datasets['train'][-1])} 样本")
     else:
-        print(f"数学符号目录 {math_symbols_dir} 不存在")
+        print(f"  ❌ MNIST训练文件不存在: {mnist_train_path}")
 
-    # 合并数据集
-    combined_train = ConcatDataset(train_datasets)
-    combined_test = ConcatDataset(test_datasets)
+    # (为简洁起见，省略了val和test的加载代码，逻辑与train相同)
+    if os.path.exists(mnist_val_path):
+        all_datasets['val'].append(
+            MnistSplitDataset(mnist_val_path, transform=val_test_transform, target_size=target_size))
+        print(f"  ✓ MNIST 验证: {len(all_datasets['val'][-1])} 样本")
 
-    print(f"最终数据集: {len(combined_train)} 训练样本, {len(combined_test)} 测试样本")
+    if os.path.exists(mnist_test_path):
+        all_datasets['test'].append(
+            MnistSplitDataset(mnist_test_path, transform=val_test_transform, target_size=target_size))
+        print(f"  ✓ MNIST 测试: {len(all_datasets['test'][-1])} 样本")
 
-    # 创建数据加载器
-    train_loader = DataLoader(combined_train, batch_size=batch_size, shuffle=True, num_workers=2)
-    test_loader = DataLoader(combined_test, batch_size=batch_size, num_workers=2)
+    # 2. 加载符号数据 - 使用绝对路径
+    print("\n2. 加载符号数据...")
+    symbols_base = os.path.join(PROJECT_ROOT, "data", "data_black_white", "math_symbols_split")
+    print(f"  符号数据根目录: {symbols_base}")
 
-    return train_loader, test_loader
+    if not os.path.exists(symbols_base):
+        print(f"  ❌ 符号数据目录不存在")
+    else:
+        symbol_ids = [10, 11, 12, 13, 14]
+        for split in ['train', 'val', 'test']:
+            print(f"  处理 {split} 集符号:")
+            split_samples = []
+            for symbol_id in symbol_ids:
+                symbol_path = os.path.join(symbols_base, split, str(symbol_id))
+                if os.path.exists(symbol_path):
+                    files = glob(f"{symbol_path}/*.png") + glob(f"{symbol_path}/*.jpg")
+                    clean_files = [f for f in files if
+                                   not any(x in os.path.basename(f) for x in ['_original', '_inverted'])]
+                    if clean_files:
+                        symbol_samples = [(img_path, symbol_id) for img_path in clean_files]
+                        split_samples.extend(symbol_samples)
+                        print(f"    符号 {symbol_id} ({SYMBOL_CLASSES[symbol_id]}): {len(symbol_samples)} 样本")
+
+            if split_samples:
+                transform = train_transform if split == 'train' else val_test_transform
+                all_datasets[split].append(
+                    MathSymbolDataset(split_samples, transform=transform, target_size=target_size))
+                print(f"    {split} 符号总计: {len(split_samples)} 样本")
+
+    # 3. 合并并创建加载器
+    print("\n3. 创建数据加载器...")
+    loaders = {}
+    for split in ['train', 'val', 'test']:
+        if all_datasets[split]:
+            combined_dataset = ConcatDataset(all_datasets[split])
+            shuffle = True if split == 'train' else False
+            loaders[split] = DataLoader(combined_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=2)
+            print(f"  ✓ {split} 加载器创建成功, 总样本数: {len(combined_dataset)}")
+        else:
+            loaders[split] = None
+            print(f"  ❌ {split} 加载器: 无数据")
+
+    print("=" * 60)
+    return loaders.get('train'), loaders.get('val'), loaders.get('test')
+
+
+if __name__ == "__main__":
+    train_loader, val_loader, test_loader = load_datasets(batch_size=32, target_size=28)

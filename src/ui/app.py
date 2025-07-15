@@ -22,8 +22,8 @@ from src.models.symbol_recognizer import SymbolRecognizer
 from src.models.config import SYMBOL_CLASSES
 from src.data.preprocessing import preprocess_image, process_image
 from src.recognition.formula import recognize_formula, generate_visualization, formula_to_latex
-from src.ui.canvas import capture_canvas
-
+from src.ui.canvas import capture_canvas # 使用我们新的函数
+from torchvision import transforms     # 必须导入
 
 class HandwrittenFormulaRecognitionApp:
     """手写公式识别应用的主界面类"""
@@ -236,7 +236,7 @@ class HandwrittenFormulaRecognitionApp:
         if self.last_x and self.last_y:
             self.canvas.create_line(
                 self.last_x, self.last_y, event.x, event.y,
-                width=3, fill="black", capstyle=tk.ROUND,
+                width=5, fill="black", capstyle=tk.ROUND,
                 smooth=tk.TRUE, splinesteps=36
             )
         self.last_x = event.x
@@ -421,7 +421,18 @@ class HandwrittenFormulaRecognitionApp:
             import traceback
             traceback.print_exc()
             return None
+    def _add_to_history(self, formula, result):
+        """添加识别结果到历史记录"""
+        # 不再尝试直接操作可能不存在的文本控件
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # 添加到历史记录列表
+        self.history_records.append((timestamp, formula, result))
+
+        # 如果历史记录可见，则刷新显示
+        if self.history_visible:
+            self._refresh_history()
 
     def _recognize_formula(self):
         """识别加载的图像或手绘图像中的数学公式"""
@@ -502,15 +513,3 @@ class HandwrittenFormulaRecognitionApp:
 
             print(f"错误详情: {str(e)}")
             traceback.print_exc()
-    def _add_to_history(self, formula, result):
-        """添加识别结果到历史记录"""
-        # 不再尝试直接操作可能不存在的文本控件
-        import datetime
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # 添加到历史记录列表
-        self.history_records.append((timestamp, formula, result))
-
-        # 如果历史记录可见，则刷新显示
-        if self.history_visible:
-            self._refresh_history()
