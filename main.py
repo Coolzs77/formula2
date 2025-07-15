@@ -26,7 +26,7 @@ def main():
     if not (args.train or args.ui or args.generate_symbols):
         args.ui = True
     
-    # # 如果只需要生成数学符号数据集
+    # # 如果只需要生成数学符号数据集h
     # if args.generate_symbols:
     #     from src.data.generator import MathSymbolGenerator
     #     print("开始生成数学符号数据集...")
@@ -37,7 +37,7 @@ def main():
     
     if args.train:
         print("开始训练模型...")
-        from scripts.train import train_model
+        from scripts.train_model import train_model
         train_model(epochs=args.epochs, batch_size=args.batch_size)
     
     if args.ui:

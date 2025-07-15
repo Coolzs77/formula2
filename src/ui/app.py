@@ -386,51 +386,33 @@ class HandwrittenFormulaRecognitionApp:
 
             # 保存当前显示的图像
             self.current_display_image = display_image
+
     def _get_image_from_canvas(self):
         """将画布内容转换为图像"""
         try:
             self.status_bar.config(text="正在获取画布内容...")
 
-            # 获取画布尺寸
-            width = self.canvas.winfo_width()
-            height = self.canvas.winfo_height()
+            # 使用修复后的capture_canvas函数，直接获得MNIST格式的PIL图像
+            pil_image = capture_canvas(self.canvas)
 
-            # 创建一个与画布相同大小的PIL图像
-            pil_image = Image.new('RGB', (width, height), color='white')
-            draw = ImageDraw.Draw(pil_image)
-
-            # 获取所有项目
-            items = self.canvas.find_all()
-
-            # 如果没有绘制任何内容
-            if not items:
+            if pil_image is None:
                 self.status_bar.config(text="画布为空，请先绘制内容")
-                return
+                return None
 
-            # 绘制所有线条
-            for item in items:
-                # 获取线条坐标
-                coords = self.canvas.coords(item)
-                # 线条宽度
-                width_val = self.canvas.itemcget(item, 'width')
-                # 绘制线段
-                for i in range(0, len(coords) - 2, 2):
-                    draw.line(
-                        [coords[i], coords[i + 1], coords[i + 2], coords[i + 3]],
-                        fill='black',
-                        width=int(float(width_val))
-                    )
+            # 将PIL图像转换为OpenCV格式用于显示和后续处理
+            img_array = np.array(pil_image)
 
-            # 转换为OpenCV格式
-            self.original_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+            # 如果是灰度图，转换为3通道用于显示
+            if len(img_array.shape) == 2:
+                self.original_image = cv2.cvtColor(img_array, cv2.COLOR_GRAY2BGR)
+            else:
+                self.original_image = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
 
-            # 确保笔迹为黑色，背景为白色
-            gray = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
-            _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
-            self.original_image = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
-
+            # 显示图像
             self._display_image(self.original_image)
             self.status_bar.config(text="从画布获取图像成功")
+
+            return self.original_image
 
         except Exception as e:
             self.status_bar.config(text=f"获取画布图像失败: {str(e)}")
@@ -438,19 +420,8 @@ class HandwrittenFormulaRecognitionApp:
             print(f"错误详情: {str(e)}")
             import traceback
             traceback.print_exc()
+            return None
 
-    def _add_to_history(self, formula, result):
-        """添加识别结果到历史记录"""
-        # 不再尝试直接操作可能不存在的文本控件
-        import datetime
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # 添加到历史记录列表
-        self.history_records.append((timestamp, formula, result))
-
-        # 如果历史记录可见，则刷新显示
-        if self.history_visible:
-            self._refresh_history()
 
     def _recognize_formula(self):
         """识别加载的图像或手绘图像中的数学公式"""
@@ -531,3 +502,15 @@ class HandwrittenFormulaRecognitionApp:
 
             print(f"错误详情: {str(e)}")
             traceback.print_exc()
+    def _add_to_history(self, formula, result):
+        """添加识别结果到历史记录"""
+        # 不再尝试直接操作可能不存在的文本控件
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # 添加到历史记录列表
+        self.history_records.append((timestamp, formula, result))
+
+        # 如果历史记录可见，则刷新显示
+        if self.history_visible:
+            self._refresh_history()

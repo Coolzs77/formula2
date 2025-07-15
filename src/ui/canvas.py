@@ -19,7 +19,7 @@ def capture_canvas_windows(canvas):
         canvas: Tkinter画布对象
 
     返回:
-        OpenCV格式的图像数组
+        PIL格式的图像
     """
     try:
         import win32gui
@@ -65,11 +65,12 @@ def capture_canvas_windows(canvas):
         mfc_dc.DeleteDC()
         win32gui.ReleaseDC(hwnd, hdc)
 
-        # 转换为BGR格式
+        # 转换为RGB格式，去除Alpha通道
         img = img[..., :3]  # 去除Alpha通道
-        img = img[:, :, ::-1]  # 转换RGB为BGR
+        img = img[:, :, ::-1]  # 转换BGR为RGB
 
-        return img
+        # 转换为PIL图像
+        return Image.fromarray(img)
 
     except ImportError:
         print("无法导入win32gui和win32ui模块，请安装pywin32库")
@@ -87,7 +88,7 @@ def capture_canvas_pil(canvas):
         canvas: Tkinter画布对象
 
     返回:
-        OpenCV格式的图像数组
+        PIL格式的图像
     """
     try:
         from PIL import ImageGrab
@@ -106,10 +107,6 @@ def capture_canvas_pil(canvas):
         # 截取画布区域
         img = ImageGrab.grab(bbox=(x, y, x + width, y + height))
 
-        # 转换为OpenCV格式
-        img = np.array(img)
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-
         return img
 
     except Exception as e:
@@ -125,7 +122,7 @@ def capture_canvas_mss(canvas):
         canvas: Tkinter画布对象
 
     返回:
-        OpenCV格式的图像数组
+        PIL格式的图像
     """
     try:
         import mss
@@ -148,10 +145,11 @@ def capture_canvas_mss(canvas):
         with mss.mss() as sct:
             img = np.array(sct.grab(monitor))
 
-        # 转换格式（mss使用BGRA格式）
-        img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        # 转换格式（mss使用BGRA格式转为RGB）
+        img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
 
-        return img
+        # 转换为PIL图像
+        return Image.fromarray(img)
 
     except ImportError:
         print("无法导入mss模块，请安装: pip install mss")
@@ -161,46 +159,67 @@ def capture_canvas_mss(canvas):
         return None
 
 
-def canvas_to_binary_image(canvas_image):
+def pil_to_mnist_format(pil_image):
     """
-    将画布图像转换为二值化图像，确保笔迹为黑色、背景为白色
+    将PIL图像转换为MNIST格式（黑底白字）
 
     参数:
-        canvas_image: 捕获的画布图像
+        pil_image: PIL格式的图像
 
     返回:
-        二值化后的图像
+        MNIST格式的PIL灰度图像（黑底白字）
     """
-    if canvas_image is None:
+    if pil_image is None:
         return None
 
-    # 转为灰度
-    gray = cv2.cvtColor(canvas_image, cv2.COLOR_BGR2GRAY)
+    try:
+        # 转换为灰度图
+        gray_image = pil_image.convert('L')
 
-    # 反转图像确保背景为白色(255)，笔迹为黑色(0)
-    # 使用自适应阈值处理以获取更好的结果
-    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                   cv2.THRESH_BINARY_INV, 11, 2)
+        # 转换为numpy数组进行处理
+        img_array = np.array(gray_image)
 
-    # 应用形态学操作去除噪点
-    kernel = np.ones((2, 2), np.uint8)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+        # 确保是白底黑字格式（背景255，前景0）
+        # 如果图像主要是黑色背景，需要反转
+        if np.mean(img_array) < 127:  # 如果平均像素值偏暗，说明可能是黑底
+            img_array = 255 - img_array  # 反转为白底黑字
 
-    # 转回BGR格式
-    return cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
+        # 二值化处理：将白底黑字转换为清晰的二值图像
+        # 使用自适应阈值获得更好的效果
+        binary = cv2.adaptiveThreshold(
+            img_array, 255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY, 11, 2
+        )
+
+        # 现在binary是白底黑字（背景255，前景0）
+        # 需要转换为MNIST格式（黑底白字：背景0，前景255）
+        mnist_format = 255 - binary  # 反转：黑底白字
+
+        # 应用形态学操作去除噪点
+        kernel = np.ones((2, 2), np.uint8)
+        mnist_format = cv2.morphologyEx(mnist_format, cv2.MORPH_OPEN, kernel)
+        mnist_format = cv2.morphologyEx(mnist_format, cv2.MORPH_CLOSE, kernel)
+
+        # 转换回PIL图像
+        return Image.fromarray(mnist_format, mode='L')
+
+    except Exception as e:
+        print(f"转换为MNIST格式时出错: {e}")
+        return None
 
 
 def capture_canvas(canvas):
     """
-    使用多种方法尝试捕获画布内容，并返回二值化后的图像
+    使用多种方法尝试捕获画布内容，并返回MNIST格式的PIL图像
 
     参数:
         canvas: Tkinter画布对象
 
     返回:
-        二值化后的OpenCV图像
+        MNIST格式的PIL图像（黑底白字）
     """
-    # 直接从画布内容绘制图像 - 更可靠的方法
+    # 方法1: 直接从画布内容绘制图像 - 最可靠的方法
     try:
         # 获取画布尺寸
         width = canvas.winfo_width()
@@ -211,67 +230,68 @@ def capture_canvas(canvas):
             width = max(width, 600)
             height = max(height, 400)
 
-        # 创建一个与画布相同大小的PIL图像
+        # 创建一个与画布相同大小的PIL图像（白底）
         pil_image = Image.new('RGB', (width, height), color='white')
         draw = ImageDraw.Draw(pil_image)
 
-        # 获取所有项目
+        # 获取所有绘制项目
         items = canvas.find_all()
 
         # 如果没有绘制任何内容
         if not items:
             print("画布为空")
-            return np.ones((height, width, 3), dtype=np.uint8) * 255
+            # 返回空白的MNIST格式图像（全黑）
+            return Image.new('L', (width, height), color=0)
 
-        # 绘制所有线条
+        # 绘制所有线条（黑色笔迹）
         for item in items:
             # 获取线条坐标
             coords = canvas.coords(item)
+            if len(coords) < 4:  # 确保有足够的坐标点
+                continue
+
             # 线条宽度
-            width_val = canvas.itemcget(item, 'width')
+            try:
+                width_val = canvas.itemcget(item, 'width')
+                width_val = int(float(width_val))
+            except:
+                width_val = 3  # 默认宽度
+
             # 绘制线段
             for i in range(0, len(coords) - 2, 2):
                 draw.line(
                     [coords[i], coords[i + 1], coords[i + 2], coords[i + 3]],
-                    fill='black',
-                    width=int(float(width_val))
+                    fill='black',  # 黑色笔迹
+                    width=width_val
                 )
 
-        # 转换为OpenCV格式
-        img = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
-
-        # 确保笔迹为黑色，背景为白色
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
-
-        # 应用形态学处理增强效果
-        kernel = np.ones((2, 2), np.uint8)
-        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-
-        return cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
+        # 转换为MNIST格式
+        mnist_image = pil_to_mnist_format(pil_image)
+        if mnist_image is not None:
+            return mnist_image
 
     except Exception as e:
         print(f"直接绘制画布内容失败: {e}")
 
-        # 尝试其他方法
-        img = None
+    # 方法2: 尝试其他截图方法
+    img = None
 
-        # 方法1: 在Windows上使用win32gui/win32ui
-        if sys.platform == 'win32':
-            img = capture_canvas_windows(canvas)
+    # 在Windows上使用win32gui/win32ui
+    if sys.platform == 'win32':
+        img = capture_canvas_windows(canvas)
 
-        # 方法2: 如果方法1失败，尝试使用PIL的ImageGrab
-        if img is None:
-            img = capture_canvas_pil(canvas)
+    # 如果方法1失败，尝试使用PIL的ImageGrab
+    if img is None:
+        img = capture_canvas_pil(canvas)
 
-        # 方法3: 如果方法2失败，尝试使用mss库
-        if img is None:
-            img = capture_canvas_mss(canvas)
+    # 如果方法2失败，尝试使用mss库
+    if img is None:
+        img = capture_canvas_mss(canvas)
 
-        # 如果所有方法都失败，返回空白图像
-        if img is None:
-            print("所有截图方法均失败，创建空白图像")
-            img = np.ones((400, 600, 3), dtype=np.uint8) * 255
+    # 如果所有方法都失败，返回空白图像
+    if img is None:
+        print("所有截图方法均失败，创建空白图像")
+        return Image.new('L', (400, 600), color=0)  # MNIST格式的空白图像
 
-        # 将图像转换为二值图像
-        return canvas_to_binary_image(img)
+    # 将捕获的图像转换为MNIST格式
+    return pil_to_mnist_format(img)
