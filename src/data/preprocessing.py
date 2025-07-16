@@ -80,7 +80,7 @@ def preprocess_image(image_input,source='canvas', normalize=False):
 
     processed_image = blurred_image
 
-    cv2.imshow("blurred_image", blurred_image)
+    # cv2.imshow("blurred_image", blurred_image)
 
     # 归一化到[0,1]范围
     if normalize:
@@ -111,30 +111,107 @@ def segment_symbols(preprocessed_image, min_contour_area=20, padding=2):
     contours, _ = cv2.findContours(gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     symbols = []
-
-    # 处理每个轮廓
+    # 过滤掉噪点
+    initial_boxes = []
     for contour in contours:
-        # 获取边界框
-        x, y, w, h = cv2.boundingRect(contour)
+        if cv2.contourArea(contour) > min_contour_area:
+            initial_boxes.append(cv2.boundingRect(contour))
 
-        # 过滤掉太小的轮廓（可能是噪点）
-        if w < 5 or h < 5 or cv2.contourArea(contour) < min_contour_area:
-            continue
-
-        # 提取符号图像
-        symbol_image = gray[y:y + h, x:x + w]
-
-        # 添加到结果列表，包含位置信息
+    # 步骤 2: 【核心】调用新的合并函数
+    final_boxes = merge_contours(initial_boxes)
+    # final_boxes = initial_boxes
+    # 步骤 3: 根据最终的边界框提取符号
+    symbols = []
+    for (x, y, w, h) in final_boxes:
+        symbol_image = preprocessed_image[y:y + h, x:x + w]
         symbols.append({
             'image': symbol_image,
             'position': (x, y, w, h),
             'normalized_image': normalize_symbol(symbol_image)
         })
-
+    # # 处理每个轮廓
+    # for contour in contours:
+    #     # 获取边界框
+    #     x, y, w, h = cv2.boundingRect(contour)
+    #
+    #     # 过滤掉太小的轮廓（可能是噪点）
+    #     if w < 5 or h < 5 or cv2.contourArea(contour) < min_contour_area:
+    #         continue
+    #
+    #     # 提取符号图像
+    #     symbol_image = gray[y:y + h, x:x + w]
+    #
+    #     # 添加到结果列表，包含位置信息
+    #     symbols.append({
+    #         'image': symbol_image,
+    #         'position': (x, y, w, h),
+    #         'normalized_image': normalize_symbol(symbol_image)
+    #     })
+    #
     # 按位置排序（从左到右）
     symbols.sort(key=lambda s: s['position'][0])
 
     return symbols
+
+
+def merge_contours(boxes, overlap_threshold=0.5):
+    """
+    【最终智能版】合并边界框。
+    仅当两个框在水平方向上有显著重叠时，才将它们合并。
+    """
+    if len(boxes) <= 1:
+        return boxes
+
+    merged = True
+    while merged:
+        merged = False
+        new_boxes = []
+        # 使用一个数组来标记哪些框已经被合并掉了
+        is_merged = [False] * len(boxes)
+
+        for i in range(len(boxes)):
+            if is_merged[i]:
+                continue
+
+            # 创建当前要合并的框
+            current_box = list(boxes[i])
+
+            for j in range(i + 1, len(boxes)):
+                if is_merged[j]:
+                    continue
+
+                next_box = boxes[j]
+
+                # --- 核心判断逻辑 ---
+                # 1. 计算两个框在水平方向上的重叠区域长度
+                x1_max = current_box[0] + current_box[2]
+                x2_max = next_box[0] + next_box[2]
+                overlap_x = max(0, min(x1_max, x2_max) - max(current_box[0], next_box[0]))
+
+                # 2. 只有当重叠长度大于任一框宽度的阈值时，才认为是垂直结构
+                min_width = min(current_box[2], next_box[2])
+                if overlap_x > min_width * overlap_threshold:
+                    # 合并两个框
+                    x_min = min(current_box[0], next_box[0])
+                    y_min = min(current_box[1], next_box[1])
+                    x_max = max(current_box[0] + current_box[2], next_box[0] + next_box[2])
+                    y_max = max(current_box[1] + current_box[3], next_box[1] + next_box[3])
+
+                    current_box = [x_min, y_min, x_max - x_min, y_max - y_min]
+
+                    # 标记 next_box 已被合并
+                    is_merged[j] = True
+                    merged = True  # 标记本轮发生了合并
+
+            new_boxes.append(tuple(current_box))
+
+        # 如果本轮发生了合并，就用合并后的新列表进行下一轮检查
+        if merged:
+            boxes = new_boxes
+
+    # 按x坐标排序，确保最终顺序正确
+    new_boxes.sort(key=lambda b: b[0])
+    return new_boxes
 
 
 def normalize_symbol(symbol_image, target_size=(28, 28)):

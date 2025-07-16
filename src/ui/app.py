@@ -400,33 +400,33 @@ class HandwrittenFormulaRecognitionApp:
             messagebox.showinfo("提示", "模型尚未加载完成，请稍候")
             return
 
-        image_to_process = None
+        image = None
         current_source = self.image_source
 
         if current_source == 'file':
-            image_to_process = self.original_image
+            image = self.original_image
         else:  # 如果是来自画布或未指定来源
             # 【新代码】从画布获取图像，并设置来源
-            image_to_process = self._get_image_from_canvas()  # 假设此函数返回一个numpy数组
+            image = self._get_image_from_canvas()  # 假设此函数返回一个numpy数组
             current_source = 'canvas'
 
-        if image_to_process is None:
+        if image is None:
             messagebox.showinfo("提示", "请先加载图像或在画布上绘制")
             return
 
         try:
             self.status_bar.config(text="正在识别公式...")
 
-            # 【核心修改】将图像来源作为参数传递给预处理函数
-            preprocessed_image = preprocess_image(
-                image_to_process,
-                source = current_source  # 传递我们新的状态变量
-            )
+            # # 【核心修改】将图像来源作为参数传递给预处理函数
+            # preprocessed_image = preprocess_image(
+            #     image,
+            #     source = current_source  # 传递我们新的状态变量
+            # )
             # 显示预处理后的图像
-            self._display_image(preprocessed_image)
+            # self._display_image(preprocessed_image)
 
             # 分割符号
-            symbols_list, processed_image = process_image(self.original_image,source=current_source)
+            symbols_list, processed_image = process_image(image,source=current_source)
 
             # 检查是否成功分割出符号
             if not symbols_list:

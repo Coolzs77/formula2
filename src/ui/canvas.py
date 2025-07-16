@@ -179,27 +179,10 @@ def pil_to_mnist_format(pil_image):
         # 转换为numpy数组进行处理
         img_array = np.array(gray_image)
 
-        # 确保是白底黑字格式（背景255，前景0）
-        # 如果图像主要是黑色背景，需要反转
-        if np.mean(img_array) < 127:  # 如果平均像素值偏暗，说明可能是黑底
-            img_array = 255 - img_array  # 反转为白底黑字
 
-        # 二值化处理：将白底黑字转换为清晰的二值图像
-        # 使用自适应阈值获得更好的效果
-        binary = cv2.adaptiveThreshold(
-            img_array, 255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY, 11, 2
-        )
-
-        # 现在binary是白底黑字（背景255，前景0）
         # 需要转换为MNIST格式（黑底白字：背景0，前景255）
-        mnist_format = 255 - binary  # 反转：黑底白字
+        mnist_format = 255 - img_array  # 反转：黑底白字
 
-        # 应用形态学操作去除噪点
-        kernel = np.ones((2, 2), np.uint8)
-        mnist_format = cv2.morphologyEx(mnist_format, cv2.MORPH_OPEN, kernel)
-        mnist_format = cv2.morphologyEx(mnist_format, cv2.MORPH_CLOSE, kernel)
 
         # 转换回PIL图像
         return Image.fromarray(mnist_format, mode='L')
