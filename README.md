@@ -601,6 +601,4 @@ blur_radius = (0, 0.8)          # 模糊半径范围
 
 **最后更新**: 2025-07-16 16:17:19 北京时间  
 **维护者**: Coolzs77  
-
-
->>>>>>> a7dfccfad80595bf940bec065d0b2ebf537fe8a0
+**项目地址**: https://github.com/Coolzs77/formula2
