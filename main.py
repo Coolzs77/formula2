@@ -9,6 +9,9 @@ import os
 import tkinter as tk
 import sys
 
+from ttkthemes.themed_tk import ThemedTk
+
+
 def main():
     """
     主程序入口
@@ -35,7 +38,7 @@ def main():
     
     if args.ui:
         print("启动用户界面...")
-        root = tk.Tk()
+        root = ThemedTk(theme="Breeze")
         # 导入UI模块
         from src.ui.app import HandwrittenFormulaRecognitionApp
         app = HandwrittenFormulaRecognitionApp(root)

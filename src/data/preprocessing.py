@@ -89,9 +89,9 @@ def preprocess_image(image_input,source='canvas', normalize=False):
     return processed_image
 
 
-def segment_symbols(preprocessed_image, min_contour_area=20, padding=2):
+def segment_symbols(preprocessed_image, min_contour_area=20, padding=5):  # 增加默认填充值
     """
-    将预处理后的公式图像分割成单个符号
+    将预处理后的公式图像分割成单个符号，保留足够边距
 
     参数:
         preprocessed_image: 预处理后的二值化图像
@@ -115,46 +115,53 @@ def segment_symbols(preprocessed_image, min_contour_area=20, padding=2):
     initial_boxes = []
     for contour in contours:
         if cv2.contourArea(contour) > min_contour_area:
-            initial_boxes.append(cv2.boundingRect(contour))
+            x, y, w, h = cv2.boundingRect(contour)
 
-    # 步骤 2: 【核心】调用新的合并函数
-    final_boxes = merge_contours(initial_boxes)
-    # final_boxes = initial_boxes
+            # 添加边距，但确保不超出图像范围
+            x_with_padding = max(0, x - padding)
+            y_with_padding = max(0, y - padding)
+            w_with_padding = min(preprocessed_image.shape[1] - x_with_padding, w + 2 * padding)
+            h_with_padding = min(preprocessed_image.shape[0] - y_with_padding, h + 2 * padding)
+
+            initial_boxes.append((x_with_padding, y_with_padding, w_with_padding, h_with_padding))
+
+    # 步骤 2: 调用合并函数
+    final_boxes = merge_contours(initial_boxes, overlap_threshold=0.8)  # 调整重叠阈值
+
     # 步骤 3: 根据最终的边界框提取符号
     symbols = []
     for (x, y, w, h) in final_boxes:
+        # 确保边界在有效范围内
+        x = max(0, x)
+        y = max(0, y)
+        w = min(preprocessed_image.shape[1] - x, w)
+        h = min(preprocessed_image.shape[0] - y, h)
+
+        # 提取符号图像
         symbol_image = preprocessed_image[y:y + h, x:x + w]
+
+        # 对高宽比大的符号(可能是1)进行特殊处理
+        aspect_ratio = h / w if w > 0 else 999
+        if aspect_ratio > 3.0:  # 可能是数字1
+            # 添加额外的水平边距
+            symbol_with_margin = np.zeros((h, w + 6), dtype=np.uint8)
+            symbol_with_margin[:, 3:3 + w] = symbol_image
+            symbol_image = symbol_with_margin
+            w = w + 6  # 更新宽度
+
         symbols.append({
             'image': symbol_image,
             'position': (x, y, w, h),
-            'normalized_image': normalize_symbol(symbol_image)
+            'normalized_image': normalize_symbol(symbol_image),
+            'aspect_ratio': aspect_ratio  # 添加高宽比信息，便于后续处理
         })
-    # # 处理每个轮廓
-    # for contour in contours:
-    #     # 获取边界框
-    #     x, y, w, h = cv2.boundingRect(contour)
-    #
-    #     # 过滤掉太小的轮廓（可能是噪点）
-    #     if w < 5 or h < 5 or cv2.contourArea(contour) < min_contour_area:
-    #         continue
-    #
-    #     # 提取符号图像
-    #     symbol_image = gray[y:y + h, x:x + w]
-    #
-    #     # 添加到结果列表，包含位置信息
-    #     symbols.append({
-    #         'image': symbol_image,
-    #         'position': (x, y, w, h),
-    #         'normalized_image': normalize_symbol(symbol_image)
-    #     })
-    #
+
     # 按位置排序（从左到右）
     symbols.sort(key=lambda s: s['position'][0])
 
     return symbols
 
-
-def merge_contours(boxes, overlap_threshold=0.5):
+def merge_contours(boxes, overlap_threshold=1):
     """
     【最终智能版】合并边界框。
     仅当两个框在水平方向上有显著重叠时，才将它们合并。
@@ -190,7 +197,7 @@ def merge_contours(boxes, overlap_threshold=0.5):
 
                 # 2. 只有当重叠长度大于任一框宽度的阈值时，才认为是垂直结构
                 min_width = min(current_box[2], next_box[2])
-                if overlap_x > min_width * overlap_threshold:
+                if overlap_x >= min_width * overlap_threshold:
                     # 合并两个框
                     x_min = min(current_box[0], next_box[0])
                     y_min = min(current_box[1], next_box[1])
@@ -214,9 +221,34 @@ def merge_contours(boxes, overlap_threshold=0.5):
     return new_boxes
 
 
+def normalize_symbol_orientation(symbol_image):
+    """
+    归一化符号方向，特别针对数字1和括号的区分
+
+    参数:
+        symbol_image: 单个符号的图像
+
+    返回:
+        处理后的图像
+    """
+    # 获取原始尺寸
+    h, w = symbol_image.shape
+    aspect_ratio = h / w if w > 0 else 999
+
+    # 特别处理高宽比大的符号（可能是数字1）
+    if aspect_ratio > 3.0:  # 高宽比大于3的可能是数字1
+        # 添加水平方向边距，使数字1更容易与括号区分
+        extra_padding = max(2, int(w * 0.5))  # 至少2像素或宽度的50%
+        padded_width = w + 2 * extra_padding
+        padded = np.zeros((h, padded_width), dtype=np.uint8)
+        padded[:, extra_padding:extra_padding + w] = symbol_image
+        return padded
+
+    return symbol_image
+
 def normalize_symbol(symbol_image, target_size=(28, 28)):
     """
-    将分割出的符号图像归一化为固定大小
+    将分割出的符号图像归一化为固定大小，特别处理数字1
 
     参数:
         symbol_image: 单个符号的图像
@@ -225,28 +257,46 @@ def normalize_symbol(symbol_image, target_size=(28, 28)):
     返回:
         归一化后的图像
     """
+    # 应用方向归一化处理
+    symbol_image = normalize_symbol_orientation(symbol_image)
+
     # 获取原始尺寸
     h, w = symbol_image.shape
+    aspect_ratio = h / w if w > 0 else 999
 
-    # 计算最大边长
-    max_dim = max(w, h)
+    # 特别处理高瘦的符号(可能是数字1)
+    if aspect_ratio > 3.0:
+        # 创建一个更宽的画布，确保保留足够的水平边距
+        padding = max(4, int(w * 0.6))  # 更大的水平边距
+        canvas_width = w + 2 * padding
+        canvas_height = h
+    else:
+        # 为其他符号使用正方形画布
+        max_dim = max(w, h)
+        canvas_width = max_dim
+        canvas_height = max_dim
 
-    # 创建正方形画布（填充为黑色背景）
-    square_image = np.zeros((max_dim, max_dim), dtype=np.uint8)
+    # 创建画布（填充为黑色背景）
+    canvas = np.zeros((canvas_height, canvas_width), dtype=np.uint8)
 
     # 将符号居中放置
-    x_offset = (max_dim - w) // 2
-    y_offset = (max_dim - h) // 2
-    square_image[y_offset:y_offset + h, x_offset:x_offset + w] = symbol_image
+    x_offset = (canvas_width - w) // 2
+    y_offset = (canvas_height - h) // 2
+    canvas[y_offset:y_offset + h, x_offset:x_offset + w] = symbol_image
 
     # 调整到目标大小
-    if square_image.shape[:2] >= target_size:
-        normalized_image = cv2.resize(square_image, target_size, interpolation=cv2.INTER_AREA)
+    if canvas.shape[0] >= target_size[1] and canvas.shape[1] >= target_size[0]:
+        normalized_image = cv2.resize(canvas, target_size, interpolation=cv2.INTER_AREA)
     else:
-        normalized_image = pad_grayscale(square_image, target_size)
+        normalized_image = pad_grayscale(canvas, target_size)
+
+    # 对于数字1，可以考虑额外增强特征
+    if aspect_ratio > 3.0:
+        # 使用形态学操作增强垂直特性
+        kernel = np.ones((3, 1), np.uint8)  # 垂直方向核
+        normalized_image = cv2.morphologyEx(normalized_image, cv2.MORPH_CLOSE, kernel)
 
     return normalized_image
-
 
 def process_image(image_input,source):
     """

@@ -144,7 +144,7 @@ def load_datasets(batch_size=64, target_size=28):
     if not os.path.exists(symbols_base):
         print(f"  ❌ 符号数据目录不存在")
     else:
-        symbol_ids = [10, 11, 12, 13, 14]
+        symbol_ids = [10, 11, 12, 13, 14,15,16]
         for split in ['train', 'val', 'test']:
             print(f"  处理 {split} 集符号:")
             split_samples = []

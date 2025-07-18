@@ -87,13 +87,8 @@ def formula_to_string(recognition_results):
     
     for result in recognition_results:
         symbol = result['symbol']
-        # 特殊符号转换
-        if symbol == 'pi':
-            formula += 'π'
-        elif symbol == 'sqrt':
-            formula += '√'
-        else:
-            formula += symbol
+
+        formula += symbol
             
     return formula
 
@@ -108,49 +103,23 @@ def formula_to_latex(recognition_results):
         LaTeX格式的公式
     """
     latex = ""
-    
-    previous_symbol = None
-    skip_next = False
-    
-    for i, result in enumerate(recognition_results):
-        if skip_next:
-            skip_next = False
-            continue
-            
-        symbol = result['symbol']
-        
-        # 特殊符号转换为LaTeX格式
-        if symbol == 'pi':
-            latex += '\\pi '
-        elif symbol == 'sqrt':
-            latex += '\\sqrt{'
-            # 寻找下一个符号作为根号内的内容
-            if i + 1 < len(recognition_results):
-                next_symbol = recognition_results[i + 1]['symbol']
-                latex += next_symbol + '}'
-                skip_next = True
-            else:
-                latex += '}'
-        elif symbol == '×':
+    for res in recognition_results:
+        sym = res['symbol']
+        if sym == '+':
+            latex += '+'
+        elif sym == '-':
+            latex += '-'
+        elif sym == '×':
             latex += '\\times '
-        elif symbol == '÷':
+        elif sym == '÷':
             latex += '\\div '
-        elif symbol == '^':
-            latex += '^{'
-            # 寻找下一个符号作为指数
-            if i + 1 < len(recognition_results):
-                next_symbol = recognition_results[i + 1]['symbol']
-                latex += next_symbol + '}'
-                skip_next = True
-            else:
-                latex += '}'
+        elif sym == '(':
+            latex += '('
+        elif sym == ')':
+            latex += ') '
         else:
-            latex += symbol + ' '
-            
-        previous_symbol = symbol
-    
-    return latex
-
+            latex += sym
+    return latex.strip()
 def evaluate_formula(formula_string):
     """
     计算公式结果
@@ -161,38 +130,18 @@ def evaluate_formula(formula_string):
     返回:
         计算结果或错误信息
     """
+    """计算公式结果，支持括号优先级"""
     if sympy is None:
         return "无法计算：缺少sympy库"
-        
     try:
-        # 替换常见符号为Python可解析的形式
-        calc_string = formula_string.replace('×', '*')
-        calc_string = calc_string.replace('÷', '/')
-        calc_string = calc_string.replace('π', 'pi')
-        calc_string = calc_string.replace('√', 'sqrt')
-        
-        # 检查是否需要符号计算(包含x或y变量)
-        if 'x' in calc_string or 'y' in calc_string:
-            x, y = sympy.symbols('x y')
-            try:
-                expr = parse_expr(calc_string)
-                return expr
-            except:
-                return "无法解析表达式"
-        else:
-            # 直接计算数值结果
-            try:
-                result = eval(calc_string)
-                return result
-            except:
-                try:
-                    # 尝试使用sympy计算
-                    expr = parse_expr(calc_string)
-                    return expr
-                except:
-                    return "无法计算"
+        expr_str = (formula_string
+                    .replace('×', '*')
+                    .replace('÷', '/'))
+        # 交给 sympy 解析
+        expr = parse_expr(expr_str)
+        return expr if expr.free_symbols else expr.evalf()
     except Exception as e:
-        return f"计算错误: {str(e)}"
+        return f"计算错误: {e}"
 
 def recognize_formula(model, symbols_list, device):
     """
@@ -214,7 +163,7 @@ def recognize_formula(model, symbols_list, device):
     
     # 转换为公式字符串
     formula_string = formula_to_string(recognition_results)
-    
+
     # 计算结果
     try:
         evaluation_result = evaluate_formula(formula_string)

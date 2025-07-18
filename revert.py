@@ -22,7 +22,13 @@ def batch_invert_symbols():
 
     # 配置
     input_dirs = [
-        "data/math_symbols_split"
+        "data/math_symbols_split/test/15",
+        "data/math_symbols_split/test/16",
+        "data/math_symbols_split/train/15",
+        "data/math_symbols_split/train/16",
+        "data/math_symbols_split/val/15",
+        "data/math_symbols_split/val/16"
+
     ]
 
     output_base = "data_black_white"
@@ -97,7 +103,7 @@ def batch_invert_symbols():
     print(f"输出目录: {output_base}")
 
     # 创建说明文件
-    readme_path = os.path.join(output_base, "README.txt")
+    readme_path = os.path.join(output_base, "README.md")
     with open(readme_path, 'w', encoding='utf-8') as f:
         f.write("符号数据颜色翻转结果\n")
         f.write("=" * 30 + "\n")
