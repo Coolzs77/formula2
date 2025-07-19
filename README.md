@@ -135,7 +135,9 @@ formula2/
 ## 5. 数据准备与预处理
 
 ### 5.1 数据集
-MNIST数据集以及Kaggle上手写数学符号数据集https://www.kaggle.com/datasets/clarencezhao/handwritten-math-symbol-dataset?resource=download，https://www.kaggle.com/datasets/xainano/handwrittenmathsymbols/code
+MNIST数据集以及Kaggle手写数学符号数据集
+https://www.kaggle.com/datasets/clarencezhao/handwritten-math-symbol-dataset?resource=download
+https://www.kaggle.com/datasets/xainano/handwrittenmathsymbols/code
 ### 5.2 MNIST数据划分
 将MNIST数据集重新划分为训练集、验证集、测试集：
 
