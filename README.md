@@ -1,13 +1,9 @@
 # 手写数学公式识别系统使用说明
 
 **项目名称**: Hand-written Formula Recognition System  
-**更新时间**: 2025-07-19 16:17:19 北京时间  
-<<<<<<< HEAD
-**版本**: v2.4
-=======
+**更新时间**: 2025-07-24 15:17:19 北京时间  
 **用户**: Coolzs77  
-**版本**: v2.2
->>>>>>> 3604fdac12dd54413dfe304419b19b04ab5dc1d1
+**版本**: v2.4
 
 ## 1. 项目概述
 
@@ -60,8 +56,39 @@ scikit-learn>=1.0.0
 seaborn>=0.11.0
 ```
 
+## 3. 安装步骤
 
-## 3. 目录结构
+### 3.1 克隆项目
+```bash
+git clone https://github.com/Coolzs77/formula2.git
+cd formula2
+```
+
+### 3.2 创建虚拟环境(推荐)
+```bash
+# 使用conda
+conda create -n formula_env python=3.8
+conda activate formula_env
+
+# 或使用venv
+python -m venv formula_env
+# Windows
+formula_env\Scripts\activate
+# Linux/macOS
+source formula_env/bin/activate
+```
+
+### 3.3 安装依赖
+```bash
+pip install -r requirements.txt
+```
+
+### 3.4 验证安装
+```bash
+python main.py --help
+```
+
+## 4. 目录结构
 
 ```
 formula2/
@@ -97,9 +124,9 @@ formula2/
 │   ├── test.py                 # 测试脚本
 │   └── valid.py                # 验证脚本
 ├── test photos/                # 包含可供作为“加载图像”的测试图片
-│   ├── t1.png                   # 测试图片1
-│   ├── t2.png                   # 测试图片2
-│   └── t3.png                   # 测试图片3
+│   ├── t1.png                  # 测试图片1
+│   ├── t2.png                  # 测试图片2
+│   └── t3.png                  # 测试图片3
 ├── augment_symbols.py          # 数据增强脚本
 ├── adjust_symbol_thickness.py  # 符号粗细调整脚本
 ├── revert.py                   # 图像颜色处理脚本
@@ -108,9 +135,6 @@ formula2/
 ├── main.py                     # 主程序入口
 └── README.md                  # 本文档
 ```
-<<<<<<< HEAD
-### 5 数据集结构
-=======
 
 ## 5. 数据准备与预处理
 
@@ -123,31 +147,19 @@ https://www.kaggle.com/datasets/xainano/handwrittenmathsymbols/code
 
 ```bash
 python mnist_split.py
->>>>>>> 3604fdac12dd54413dfe304419b19b04ab5dc1d1
 ```
-data/
-├── data_black_white/           # 统一格式数据集(最终使用的数据集)
-│   └── math_symbols_split/     # 处理后的符号数据
-│       ├── train/              # 训练集(70%)
-│       ├── val/                # 验证集(15%)
-│       └── test/               # 测试集(15%)
-├── math_symbols/               # 原始符号数据
-│   ├── 10/                     # +号数据
-│   ├── 11/                     # -号数据
-│   ├── 12/                     # ×号数据
-│   ├── 13/                     # ÷号数据
-│   └── 14/                     # .号数据
-│   └── 15/                     # (号数据
-│   └── 16/                     # )号数据
-├── math_symbols_split/         # 划分后的原始符号数据
-├── mnist/                      # MNIST数据集
-└── mnist_split/                # 划分后的MNIST数据
-    ├── mnist_train.pkl
-    ├── mnist_val.pkl
-    └── mnist_test.pkl
+
+该脚本会：
+- 加载MNIST原始数据
+- 按类别进行分层划分(70%训练，15%验证，15%测试)
+- 保存到`data/mnist_split/`目录
+
+### 5.3 符号数据划分
+将数学符号数据集进行划分：
+
+```bash
+python sign_split.py
 ```
-<<<<<<< HEAD
-=======
 
 该脚本会：
 - 处理`data/math_symbols/`中的原始符号数据
@@ -188,8 +200,22 @@ python augment_symbols.py --dir ./data/math_symbols --factor 10 --no-scaling
 ### 5.6 符号像素粗细调整
 - 对左右括号原始数据集进行符号像素加粗
 
->>>>>>> 3604fdac12dd54413dfe304419b19b04ab5dc1d1
 ## 6. 快速开始
+
+### 6.1 数据准备流程
+```bash
+# 1. 划分MNIST数据
+python mnist_split.py
+
+# 2. 划分符号数据
+python sign_split.py
+
+# 3. 标准化图像格式
+python revert.py
+
+# 4. 数据增强(可选)
+python augment_symbols.py --dir ./data/math_symbols --factor 5
+```
 
 ### 6.2 训练模型
 ```bash
@@ -309,8 +335,6 @@ python revert.py
 - 批量处理整个数据集
 - 生成处理报告和统计信息
 - 保持原始文件，同时生成标准格式文件
-<<<<<<< HEAD
-=======
 
 ## 8. 网络架构详解
 
@@ -570,10 +594,14 @@ blur_radius = (0, 0.8)          # 模糊半径范围
 - 相关开源项目的启发和参考
 
 ## 17. 版本更新记录
+### v2.4 (2025-07-24)
+- 添加测试图片
+- 更新目录结构
+  
 ### v2.2 (2025-07-19)
 - 添加了对左右括号的识别
 - 优化了ui界面
-- 
+  
 ### v2.1 (2025-07-16)
 - 更新项目目录结构
 - 移除generator.py依赖
@@ -596,6 +624,6 @@ blur_radius = (0, 0.8)          # 模糊半径范围
 
 ---
 
-**最后更新**: 2025-07-19 16:17:19 北京时间  
+**最后更新**: 2025-07-24 15:17:19 北京时间  
 **维护者**: Coolzs77  
 **项目地址**: https://github.com/Coolzs77/formula2
