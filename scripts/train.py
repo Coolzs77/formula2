@@ -169,7 +169,7 @@ def train_model(epochs=15, batch_size=64, learning_rate=0.001):
         history['val_acc'].append(val_accuracy)
 
         # 更新学习率
-        # scheduler.step(val_loss)
+        scheduler.step(val_loss)
 
         # 打印轮次结果
         print(f'Epoch {epoch + 1}/{epochs}: '
@@ -305,7 +305,7 @@ def plot_training_history(history, save_path=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='训练手写公式识别模型')
-    parser.add_argument('--epochs', type=int, default=15, help='训练轮数')
+    parser.add_argument('--epochs', type=int, default=30, help='训练轮数')
     parser.add_argument('--batch_size', type=int, default=64, help='批次大小')
     parser.add_argument('--lr', type=float, default=0.005, help='学习率')
 

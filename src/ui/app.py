@@ -229,7 +229,7 @@ class HandwrittenFormulaRecognitionApp:
         ttk.Label(self.toolbar_frame, text="笔触:", font=FONTS['small']).pack(side=tk.LEFT, padx=(5, 2))
         self.brush_size = tk.IntVar(value=5)
         brush_combo = ttk.Combobox(self.toolbar_frame, textvariable=self.brush_size,
-                                   values=[1, 3, 5, 7, 9], width=3, state="readonly")
+                                   values=[1,2,3,4,5,6,7,8,9], width=3, state="readonly")
         brush_combo.pack(side=tk.LEFT, padx=2)
         brush_combo.bind("<<ComboboxSelected>>", self._update_brush)
 
@@ -528,7 +528,7 @@ class HandwrittenFormulaRecognitionApp:
             self.tool_label.config(text="模式: 画笔")
             self.canvas.config(cursor="pencil")
         else:  # eraser
-            self.tool_label.config(text="模式: 橡皮擦")
+            self.tool_label.config(text="模式: 橡皮")
             self.canvas.config(cursor="circle")
 
     def _load_model_async(self):

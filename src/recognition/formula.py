@@ -207,7 +207,8 @@ def generate_visualization(base_image, recognition_results, offset=(0, 0), scale
         # 使用最终坐标添加红色识别结果标签
         symbol_display_map = {'×': 'x', '÷': '/'}
         display_symbol = symbol_display_map.get(symbol, symbol)
-        label = f"{display_symbol} ({conf:.1f}%)"
+        # label = f"{display_symbol} ({conf:.1f}%)"
+        label = f"{display_symbol}"
 
         label_y_pos = final_y - 10 if final_y > 20 else final_y + final_h + 20
         cv2.putText(vis_image, label, (final_x, label_y_pos),

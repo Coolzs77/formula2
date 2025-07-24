@@ -290,11 +290,6 @@ def normalize_symbol(symbol_image, target_size=(28, 28)):
     else:
         normalized_image = pad_grayscale(canvas, target_size)
 
-    # 对于数字1，可以考虑额外增强特征
-    if aspect_ratio > 3.0:
-        # 使用形态学操作增强垂直特性
-        kernel = np.ones((3, 1), np.uint8)  # 垂直方向核
-        normalized_image = cv2.morphologyEx(normalized_image, cv2.MORPH_CLOSE, kernel)
 
     return normalized_image
 

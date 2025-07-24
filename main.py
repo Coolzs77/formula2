@@ -25,7 +25,7 @@ def main():
     
     args = parser.parse_args()
     
-    # 如果没有指定参数，默认启动界面
+    # 如果没有指定参数，默认启动 界面
     if not (args.train or args.ui or args.generate_symbols):
         args.ui = True
     

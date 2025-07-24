@@ -368,7 +368,7 @@ def analyze_class_distribution(test_loader, class_names):
     plt.bar(range(len(class_names)), counts, color='skyblue')
     plt.xlabel('类别')
     plt.ylabel('样本数量')
-    plt.title('测试集中各类别样本分布')
+    plt.title('数据集中各类别样本分布')
     plt.xticks(range(len(class_names)), class_names)
 
     # 添加数值标签
@@ -561,6 +561,125 @@ def save_test_results(test_results, save_path):
     print(f"测试结果已保存至 {save_path}")
 
 
+def analyze_full_dataset_distribution(batch_size=128, save_path='full_dataset_distribution.png'):
+    """
+    【最终完整版】
+    分析并以表格和图表形式，展示整个数据集中各类别的样本分布情况，
+    并标注各类别及数据集的总数。
+    """
+    print("=" * 80)
+    print("开始分析完整数据集（训练、验证、测试）的类别分布...")
+    print("=" * 80)
+
+    # 步骤 1: 加载所有数据加载器
+    try:
+        train_loader, val_loader, test_loader = load_datasets(batch_size=batch_size)
+        if not all([train_loader, val_loader, test_loader]):
+            raise ValueError("一个或多个数据集加载器为空。")
+    except Exception as e:
+        print(f"错误：数据加载失败，无法进行分析。请检查您的数据文件。错误详情: {e}")
+        return
+
+    # 步骤 2: 初始化计数器
+    class_names = [SYMBOL_CLASSES[i] for i in sorted(SYMBOL_CLASSES.keys())]
+    num_classes = len(class_names)
+
+    # 为每个数据集和总数创建一个独立的计数器
+    train_counts = {i: 0 for i in range(num_classes)}
+    val_counts = {i: 0 for i in range(num_classes)}
+    test_counts = {i: 0 for i in range(num_classes)}
+    total_counts = {i: 0 for i in range(num_classes)}
+
+    loaders = {
+        '训练集': (train_loader, train_counts),
+        '验证集': (val_loader, val_counts),
+        '测试集': (test_loader, test_counts)
+    }
+
+    # 步骤 3: 遍历所有数据加载器，分别进行统计
+    print("正在统计样本数量...")
+    for name, (loader, counts) in loaders.items():
+        for _, labels in tqdm(loader, desc=f"统计 {name}"):
+            for label in labels:
+                label_item = label.item()
+                if label_item in counts:
+                    counts[label_item] += 1
+    print("统计完成！")
+
+    # 步骤 4: 【核心】打印您需要的、包含总数的详细表格
+    print("\n" + "=" * 80)
+    print("数据集各类别样本分布详细表格")
+    print("-" * 80)
+    # 打印表头
+    print(f"{'类别ID':<8} | {'符号':<6} | {'训练集':<12} | {'验证集':<12} | {'测试集':<12} | {'总计':<12}")
+    print("-" * 80)
+
+    # 初始化总计计数器
+    total_train, total_val, total_test, grand_total = 0, 0, 0, 0
+
+    # 打印每一行的数据
+    for class_id in sorted(SYMBOL_CLASSES.keys()):
+        symbol = SYMBOL_CLASSES[class_id]
+        train_count = train_counts.get(class_id, 0)
+        val_count = val_counts.get(class_id, 0)
+        test_count = test_counts.get(class_id, 0)
+        class_total = train_count + val_count + test_count
+
+        # 更新总计
+        total_train += train_count
+        total_val += val_count
+        total_test += test_count
+        grand_total += class_total
+
+        print(
+            f"{class_id:<8} | {symbol:<6} | {train_count:<12} | {val_count:<12} | {test_count:<12} | {class_total:<12}")
+
+    # 打印总计行
+    print("-" * 80)
+    print(f"{'总计':<8} | {'-':<6} | {total_train:<12} | {total_val:<12} | {total_test:<12} | {grand_total:<12}")
+    print("=" * 80)
+
+    # --- 步骤 5: 绘制更直观的“堆叠条形图” ---
+    plt.rcParams['font.sans-serif'] = ['SimHei']
+    plt.rcParams['axes.unicode_minus'] = False
+
+    plt.figure(figsize=(16, 9))
+
+    # 准备绘图数据
+    labels = list(class_names)
+    train_data = [train_counts[i] for i in sorted(train_counts.keys())]
+    val_data = [val_counts[i] for i in sorted(val_counts.keys())]
+    test_data = [test_counts[i] for i in sorted(test_counts.keys())]
+
+    bar_width = 0.6
+    indices = np.arange(len(labels))
+
+    bar1 = plt.bar(indices, train_data, bar_width, label='训练集', color='cornflowerblue', edgecolor='grey')
+    bar2 = plt.bar(indices, val_data, bar_width, bottom=train_data, label='验证集', color='lightsalmon',
+                   edgecolor='grey')
+    bottom_for_test = [i + j for i, j in zip(train_data, val_data)]
+    bar3 = plt.bar(indices, test_data, bar_width, bottom=bottom_for_test, label='测试集', color='lightgreen',
+                   edgecolor='grey')
+
+    # 【核心】在每个堆叠条形图的顶部标注总数
+    for i, (train_val, val_val, test_val) in enumerate(zip(train_data, val_data, test_data)):
+        total_height = train_val + val_val + test_val
+        plt.text(i, total_height, f'{total_height}', ha='center', va='bottom', fontsize=10, weight='bold')
+
+    plt.xlabel('类别', fontsize=12, weight='bold')
+    plt.ylabel('样本数量', fontsize=12, weight='bold')
+    plt.title('数据集中各类别样本分布（按数据集划分）', fontsize=16, weight='bold')
+    plt.xticks(indices, labels, rotation=0, ha="right")
+    plt.legend()
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+
+    # 保存图像
+    if save_path:
+        plt.savefig(save_path, dpi=300)
+        print(f"\n数据集分布图已保存至: {save_path}")
+
+    plt.show()
 def test_model(args):
     """测试模型的主函数"""
     # 设置设备
@@ -651,7 +770,10 @@ def test_model(args):
     acc_path = os.path.join(results_dir, f'per_class_accuracy_{args.model_name.split(".")[0]}.png')
     plot_per_class_accuracy(per_class_acc, class_names, save_path=acc_path)
 
+
     # 分析类别分布
+    analyze_full_dataset_distribution()
+
     print("分析测试集类别分布...")
     analyze_class_distribution(test_loader, class_names)
 

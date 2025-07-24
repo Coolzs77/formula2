@@ -183,4 +183,4 @@ def load_datasets(batch_size=64, target_size=28):
 
 
 if __name__ == "__main__":
-    train_loader, val_loader, test_loader = load_datasets(batch_size=32, target_size=28)
+    train_loader, val_loader, test_loader = load_datasets(batch_size=64, target_size=28)
